@@ -94,6 +94,48 @@ export function fetchRelatedResults(query) {
   });
 }
 
+
+export function fetchDoctorProfilesByNames(names, options) {
+  var limit = options && options.limit ? options.limit : 6;
+  var uniqueNames = [];
+  var seen = {};
+
+  (names || []).forEach(function (name) {
+    var cleaned = cleanValue(name);
+    var key = normalizeLookupValue(cleaned);
+    if (!cleaned || !key || seen[key]) return;
+    seen[key] = true;
+    uniqueNames.push(cleaned);
+  });
+
+  uniqueNames = uniqueNames.slice(0, limit);
+
+  return new Promise(function (resolve) {
+    if (!uniqueNames.length) {
+      resolve([]);
+      return;
+    }
+
+    function trySearch() {
+      var client = getClient();
+      if (!client) {
+        setTimeout(trySearch, 300);
+        return;
+      }
+
+      Promise.all(uniqueNames.map(function (name) {
+        return searchDoctorProfile(client, name);
+      })).then(function (profiles) {
+        resolve(profiles.filter(Boolean));
+      }).catch(function () {
+        resolve([]);
+      });
+    }
+
+    trySearch();
+  });
+}
+
 export function fetchCompareCandidates(query, options) {
   var limit = options && options.limit ? options.limit : 8;
   return new Promise(function (resolve) {
@@ -214,6 +256,7 @@ function normalizeCompareHit(hit) {
     ].filter(Boolean),
     bio: snippet,
     url: url || '#',
+    imageUrl: extractImageUrl(hit),
     source: 'live'
   };
 }
@@ -252,4 +295,106 @@ function truncate(text, maxLen) {
   var clean = String(text || '').replace(/\s+/g, ' ').trim();
   if (clean.length <= maxLen) return clean;
   return clean.slice(0, maxLen - 1).trim() + '…';
+}
+
+
+function searchDoctorProfile(client, name) {
+  return new Promise(function (resolve) {
+    try {
+      client.search(name, function (response) {
+        var hits = response && response.hits ? response.hits : [];
+        var profiles = hits
+          .map(normalizeDoctorProfileHit)
+          .filter(function (item) { return !!item; });
+
+        var targetKey = normalizeLookupValue(name);
+        var best = profiles.find(function (profile) {
+          return normalizeLookupValue(profile.name) === targetKey && isDoctorProfileUrl(profile.url);
+        }) || profiles.find(function (profile) {
+          return normalizeLookupValue(profile.name) === targetKey;
+        }) || profiles.find(function (profile) {
+          return isDoctorProfileUrl(profile.url);
+        }) || profiles[0] || null;
+
+        resolve(best);
+      });
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+function normalizeDoctorProfileHit(hit) {
+  if (!hit) return null;
+
+  var name = firstNonEmpty([
+    hit.title,
+    pickDeep(hit, ['meta', 'title']),
+    pickDeep(hit, ['custom_fields', 'title'])
+  ]);
+  var url = firstNonEmpty([hit.url, pickDeep(hit, ['meta', 'url'])]);
+  if (!name && !url) return null;
+
+  var specialty = firstNonEmpty([
+    hit.specialty,
+    hit.profession,
+    hit.role,
+    hit.occupation,
+    pickDeep(hit, ['custom_fields', 'specialty']),
+    pickDeep(hit, ['meta', 'specialty']),
+    hit.category,
+    'Professional profile'
+  ]);
+
+  return {
+    id: String(firstNonEmpty([hit.id, url, name])),
+    name: name || 'Professional',
+    specialty: specialty,
+    url: url || '#',
+    imageUrl: extractImageUrl(hit)
+  };
+}
+
+function extractImageUrl(hit) {
+  var raw = firstNonEmpty([
+    hit.picturePath,
+    hit.picturepath,
+    hit.image,
+    hit.thumbnail,
+    pickDeep(hit, ['custom_fields', 'picturePath']),
+    pickDeep(hit, ['custom_fields', 'picturepath']),
+    pickDeep(hit, ['meta', 'picturePath']),
+    pickDeep(hit, ['meta', 'picturepath']),
+    pickDeep(hit, ['images', 'main']),
+    pickDeep(hit, ['images', 'capture'])
+  ]);
+
+  return normalizeImageUrl(raw);
+}
+
+function normalizeImageUrl(value) {
+  if (!value) return '';
+  if (Array.isArray(value)) value = firstNonEmpty(value);
+  var str = String(value || '').trim();
+  if (!str) return '';
+  if (/^https?:\/\//i.test(str)) return str;
+  if (str.indexOf('//') === 0) return 'https:' + str;
+  if (str.charAt(0) === '/') {
+    if (/\/media\//i.test(str) || /\/images?\//i.test(str)) {
+      return 'https://media3.mehilainen.fi' + str;
+    }
+    return 'https://www.mehilainen.fi' + str;
+  }
+  if (/^(media|terveyspalvelut\/media|images?\/)/i.test(str)) {
+    return 'https://media3.mehilainen.fi/' + str.replace(/^\/+/, '');
+  }
+  return str;
+}
+
+function isDoctorProfileUrl(url) {
+  return /\/doctors-and-specialists\//i.test(String(url || ''));
+}
+
+function normalizeLookupValue(value) {
+  return cleanValue(value).toLowerCase().replace(/[^a-zà-öø-ÿåäö0-9]+/g, ' ').trim();
 }
