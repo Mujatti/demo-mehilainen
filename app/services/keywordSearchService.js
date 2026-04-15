@@ -180,9 +180,18 @@ function normalizeCompareHit(hit) {
   var name = firstNonEmpty([
     hit.title,
     pickDeep(hit, ['meta', 'title']),
+    pickDeep(hit, ['customFields', 'pageTitle']),
+    pickDeep(hit, ['customFields', 'pageName']),
+    pickDeep(hit, ['custom_fields', 'pageTitle']),
+    pickDeep(hit, ['custom_fields', 'pageName']),
     pickDeep(hit, ['custom_fields', 'title'])
   ]);
-  var url = firstNonEmpty([hit.url, pickDeep(hit, ['meta', 'url'])]);
+  var url = firstNonEmpty([
+    pickDeep(hit, ['customFields', 'pagePath']),
+    pickDeep(hit, ['custom_fields', 'pagePath']),
+    hit.url,
+    pickDeep(hit, ['meta', 'url'])
+  ]);
   if (!name && !url) return null;
 
   var specialty = firstNonEmpty([
@@ -190,7 +199,11 @@ function normalizeCompareHit(hit) {
     hit.profession,
     hit.role,
     hit.occupation,
+    pickDeep(hit, ['customFields', 'title']),
+    pickDeep(hit, ['customFields', 'expertise']),
     pickDeep(hit, ['custom_fields', 'specialty']),
+    pickDeep(hit, ['custom_fields', 'title']),
+    pickDeep(hit, ['custom_fields', 'expertise']),
     pickDeep(hit, ['meta', 'specialty']),
     hit.category,
     'Professional profile'
@@ -255,7 +268,7 @@ function normalizeCompareHit(hit) {
       visitTypes.join(', ')
     ].filter(Boolean),
     bio: snippet,
-    url: url || '#',
+    url: normalizeProfileUrl(url || '#'),
     imageUrl: extractImageUrl(hit),
     source: 'live'
   };
@@ -364,9 +377,18 @@ function normalizeDoctorProfileHit(hit) {
   var name = firstNonEmpty([
     hit.title,
     pickDeep(hit, ['meta', 'title']),
+    pickDeep(hit, ['customFields', 'pageTitle']),
+    pickDeep(hit, ['customFields', 'pageName']),
+    pickDeep(hit, ['custom_fields', 'pageTitle']),
+    pickDeep(hit, ['custom_fields', 'pageName']),
     pickDeep(hit, ['custom_fields', 'title'])
   ]);
-  var url = firstNonEmpty([hit.url, pickDeep(hit, ['meta', 'url'])]);
+  var url = firstNonEmpty([
+    pickDeep(hit, ['customFields', 'pagePath']),
+    pickDeep(hit, ['custom_fields', 'pagePath']),
+    hit.url,
+    pickDeep(hit, ['meta', 'url'])
+  ]);
   if (!name && !url) return null;
 
   var specialty = firstNonEmpty([
@@ -374,7 +396,11 @@ function normalizeDoctorProfileHit(hit) {
     hit.profession,
     hit.role,
     hit.occupation,
+    pickDeep(hit, ['customFields', 'title']),
+    pickDeep(hit, ['customFields', 'expertise']),
     pickDeep(hit, ['custom_fields', 'specialty']),
+    pickDeep(hit, ['custom_fields', 'title']),
+    pickDeep(hit, ['custom_fields', 'expertise']),
     pickDeep(hit, ['meta', 'specialty']),
     hit.category,
     'Professional profile'
@@ -384,9 +410,18 @@ function normalizeDoctorProfileHit(hit) {
     id: String(firstNonEmpty([hit.id, url, name])),
     name: name || 'Professional',
     specialty: specialty,
-    url: url || '#',
+    url: normalizeProfileUrl(url || '#'),
     imageUrl: extractImageUrl(hit)
   };
+}
+
+
+function normalizeProfileUrl(url) {
+  var str = String(url || '').trim();
+  if (!str) return '#';
+  if (/^https?:\/\//i.test(str)) return str;
+  if (str.charAt(0) === '/') return 'https://www.mehilainen.fi' + str;
+  return str;
 }
 
 function extractImageUrl(hit) {
@@ -426,6 +461,9 @@ function normalizeImageUrl(value) {
   }
   if (/^(media|terveyspalvelut\/media|images?\/)/i.test(str)) {
     return 'https://media3.mehilainen.fi/' + str.replace(/^\/+/, '');
+  }
+  if (/^[a-z0-9_-]+\.(jpg|jpeg|png|webp|gif)$/i.test(str)) {
+    return 'https://media3.mehilainen.fi/terveyspalvelut/media/images/l/' + str;
   }
   return str;
 }
