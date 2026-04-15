@@ -136,6 +136,50 @@ export function fetchDoctorProfilesByNames(names, options) {
   });
 }
 
+
+export function fetchDoctorProfilesForQuery(query, options) {
+  var limit = options && options.limit ? options.limit : 6;
+  var normalizedQuery = cleanValue(query);
+  return new Promise(function (resolve) {
+    if (!normalizedQuery) {
+      resolve([]);
+      return;
+    }
+
+    function trySearch() {
+      var client = getClient();
+      if (!client) {
+        setTimeout(trySearch, 300);
+        return;
+      }
+
+      try {
+        client.search(normalizedQuery, function (response) {
+          var hits = response && response.hits ? response.hits : [];
+          var profiles = hits
+            .map(normalizeDoctorProfileHit)
+            .filter(function (item) { return !!item && isDoctorProfileUrl(item.url); });
+
+          var unique = [];
+          var seen = {};
+          profiles.forEach(function (profile) {
+            var key = normalizeLookupValue(profile.name || profile.url);
+            if (!key || seen[key]) return;
+            seen[key] = true;
+            unique.push(profile);
+          });
+
+          resolve(unique.slice(0, limit));
+        });
+      } catch (error) {
+        resolve([]);
+      }
+    }
+
+    trySearch();
+  });
+}
+
 export function fetchCompareCandidates(query, options) {
   var limit = options && options.limit ? options.limit : 8;
   return new Promise(function (resolve) {

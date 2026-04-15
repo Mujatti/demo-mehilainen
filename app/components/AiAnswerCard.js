@@ -9,7 +9,7 @@ import MarkdownRenderer from './MarkdownRenderer';
 import SmoothStreamingText from './SmoothStreamingText';
 import ThinkingIndicator from './ThinkingIndicator';
 import DoctorResultsBlock from './DoctorResultsBlock';
-import { fetchDoctorProfilesByNames, mergeDoctorNames } from '../services/keywordSearchService';
+import { fetchDoctorProfilesByNames, fetchDoctorProfilesForQuery, mergeDoctorNames } from '../services/keywordSearchService';
 
 export default function AiAnswerCard({
   answer, sources, isStreaming, isThinking,
@@ -20,7 +20,7 @@ export default function AiAnswerCard({
   var doctorNames = useMemo(function () {
     return mergeDoctorNames(extractDoctorNamesFromAnswer(answer), sources || []);
   }, [answer, sources]);
-  var doctorProfiles = useDoctorProfiles(doctorNames, isStreaming, isThinking);
+  var doctorProfiles = useDoctorProfiles(doctorNames, query, isStreaming, isThinking);
 
   return (
     <div className={'px-answer-card' + (query ? ' px-initial-answer' : '')}>
@@ -63,8 +63,9 @@ export default function AiAnswerCard({
   );
 }
 
-function useDoctorProfiles(doctorNames, isStreaming, isThinking) {
+function useDoctorProfiles(doctorNames, query, isStreaming, isThinking) {
   var doctorNamesKey = doctorNames.join('|');
+  var queryKey = String(query || '').trim();
   var [profiles, setProfiles] = useState([]);
 
   useEffect(function () {
@@ -76,13 +77,32 @@ function useDoctorProfiles(doctorNames, isStreaming, isThinking) {
     }
 
     fetchDoctorProfilesByNames(doctorNames, { limit: 6 }).then(function (result) {
-      if (!cancelled) setProfiles(Array.isArray(result) ? result : []);
+      if (cancelled) return;
+      var safeResult = Array.isArray(result) ? result : [];
+      if (safeResult.length > 0 || !queryKey) {
+        setProfiles(safeResult);
+        return;
+      }
+
+      fetchDoctorProfilesForQuery(queryKey, { limit: 6 }).then(function (fallback) {
+        if (!cancelled) setProfiles(Array.isArray(fallback) ? fallback : []);
+      }).catch(function () {
+        if (!cancelled) setProfiles([]);
+      });
     }).catch(function () {
-      if (!cancelled) setProfiles([]);
+      if (!queryKey) {
+        if (!cancelled) setProfiles([]);
+        return;
+      }
+      fetchDoctorProfilesForQuery(queryKey, { limit: 6 }).then(function (fallback) {
+        if (!cancelled) setProfiles(Array.isArray(fallback) ? fallback : []);
+      }).catch(function () {
+        if (!cancelled) setProfiles([]);
+      });
     });
 
     return function () { cancelled = true; };
-  }, [doctorNamesKey, isStreaming, isThinking]);
+  }, [doctorNamesKey, queryKey, isStreaming, isThinking]);
 
   return profiles;
 }

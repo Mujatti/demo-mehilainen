@@ -180,6 +180,7 @@ function AppWithConfig({ config, session }) {
                       label={'AI Answers'}
                       streamingLabel={'Thinking...'}
                       sourcesLabel={'Sources'}
+                      query={state.query}
                       diveButtonText={labels.diveButtonText}
                       isThinking={state.aiLoading && !state.aiStreaming && !state.aiAnswer}
                       showDiveCta={true}
