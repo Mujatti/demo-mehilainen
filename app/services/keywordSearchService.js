@@ -6,20 +6,30 @@
 import { getConfig } from '../config/app.config';
 
 var _sharedClient = null;
+var _sharedClientKey = null;
 
 /** Get or create the shared AddSearchClient. */
 export function getClient() {
-  if (_sharedClient) return _sharedClient;
+  var config = getConfig();
+  var siteKey = config.siteKey;
+  if (!siteKey) return null;
+
+  if (_sharedClient && _sharedClientKey === siteKey) return _sharedClient;
   if (typeof window === 'undefined' || !window.AddSearchClient) return null;
+
   try {
-    _sharedClient = new window.AddSearchClient(getConfig().siteKey);
+    _sharedClient = new window.AddSearchClient(siteKey);
+    _sharedClientKey = siteKey;
     return _sharedClient;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
 /** Reset the shared client (e.g. after config change). */
 export function resetClient() {
   _sharedClient = null;
+  _sharedClientKey = null;
 }
 
 /** Initialize keyword search UI. Retries if CDN scripts aren't ready yet. */
@@ -29,7 +39,6 @@ export function initKeywordSearch(query) {
 
   function tryInit() {
     if (typeof window === 'undefined' || !window.AddSearchClient || !window.AddSearchUI) {
-      // CDN not ready — retry
       setTimeout(tryInit, 200);
       return;
     }
@@ -83,4 +92,164 @@ export function fetchRelatedResults(query) {
     }
     trySearch();
   });
+}
+
+export function fetchCompareCandidates(query, options) {
+  var limit = options && options.limit ? options.limit : 8;
+  return new Promise(function (resolve) {
+    if (!query) {
+      resolve({ results: [], totalHits: 0, error: null });
+      return;
+    }
+
+    function trySearch() {
+      var client = getClient();
+      if (!client) {
+        setTimeout(trySearch, 300);
+        return;
+      }
+
+      try {
+        client.search(query, function (response) {
+          var hits = response && response.hits ? response.hits : [];
+          var normalized = hits
+            .map(normalizeCompareHit)
+            .filter(function (item) { return !!item; })
+            .slice(0, limit);
+
+          resolve({
+            results: normalized,
+            totalHits: response && response.total_hits ? response.total_hits : normalized.length,
+            error: null,
+          });
+        });
+      } catch (error) {
+        resolve({ results: [], totalHits: 0, error: error && error.message ? error.message : 'Search failed' });
+      }
+    }
+
+    trySearch();
+  });
+}
+
+function normalizeCompareHit(hit) {
+  if (!hit) return null;
+
+  var name = firstNonEmpty([
+    hit.title,
+    pickDeep(hit, ['meta', 'title']),
+    pickDeep(hit, ['custom_fields', 'title'])
+  ]);
+  var url = firstNonEmpty([hit.url, pickDeep(hit, ['meta', 'url'])]);
+  if (!name && !url) return null;
+
+  var specialty = firstNonEmpty([
+    hit.specialty,
+    hit.profession,
+    hit.role,
+    hit.occupation,
+    pickDeep(hit, ['custom_fields', 'specialty']),
+    pickDeep(hit, ['meta', 'specialty']),
+    hit.category,
+    'Professional profile'
+  ]);
+
+  var location = firstNonEmpty([
+    hit.location,
+    hit.address,
+    hit.city,
+    pickDeep(hit, ['custom_fields', 'location']),
+    pickDeep(hit, ['meta', 'location']),
+    'See profile'
+  ]);
+
+  var languages = toArray(firstNonEmpty([
+    hit.languages,
+    hit.language,
+    pickDeep(hit, ['custom_fields', 'languages']),
+    pickDeep(hit, ['meta', 'languages'])
+  ]));
+
+  var visitTypes = toArray(firstNonEmpty([
+    hit.visitTypes,
+    hit.visitType,
+    pickDeep(hit, ['custom_fields', 'visitTypes']),
+    pickDeep(hit, ['meta', 'visitTypes'])
+  ]));
+
+  var nextAvailable = firstNonEmpty([
+    hit.nextAvailable,
+    hit.availability,
+    pickDeep(hit, ['custom_fields', 'nextAvailable']),
+    pickDeep(hit, ['meta', 'nextAvailable']),
+    'Check booking'
+  ]);
+
+  var snippet = firstNonEmpty([
+    hit.description,
+    hit.summary,
+    hit.text,
+    pickDeep(hit, ['custom_fields', 'description']),
+    pickDeep(hit, ['meta', 'description'])
+  ]) || '';
+
+  if (visitTypes.length === 0 && /video|remote|online/i.test(snippet)) visitTypes = ['Video'];
+  if (visitTypes.length === 0) visitTypes = ['Check profile'];
+  if (languages.length === 0 && /english/i.test(snippet)) languages = ['English'];
+  if (languages.length === 0) languages = ['See profile'];
+
+  return {
+    id: String(firstNonEmpty([hit.id, url, name])),
+    name: name || 'Professional',
+    specialty: specialty,
+    location: location,
+    languages: languages,
+    visitTypes: visitTypes,
+    nextAvailable: nextAvailable,
+    fit: snippet ? truncate(snippet, 120) : 'Open profile to review this professional.',
+    reasons: [
+      specialty,
+      location,
+      visitTypes.join(', ')
+    ].filter(Boolean),
+    bio: snippet,
+    url: url || '#',
+    source: 'live'
+  };
+}
+
+function firstNonEmpty(values) {
+  for (var i = 0; i < values.length; i += 1) {
+    var value = values[i];
+    if (Array.isArray(value) && value.length) return value;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (value && typeof value !== 'object') return value;
+  }
+  return '';
+}
+
+function pickDeep(obj, path) {
+  var current = obj;
+  for (var i = 0; i < path.length; i += 1) {
+    if (!current || typeof current !== 'object') return '';
+    current = current[path[i]];
+  }
+  return current || '';
+}
+
+function toArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(cleanValue).filter(Boolean);
+  if (typeof value === 'string') return value.split(/[,|/]/).map(cleanValue).filter(Boolean);
+  return [cleanValue(String(value))].filter(Boolean);
+}
+
+function cleanValue(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function truncate(text, maxLen) {
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLen) return clean;
+  return clean.slice(0, maxLen - 1).trim() + '…';
 }

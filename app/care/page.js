@@ -7,13 +7,14 @@ import * as orchestrator from '../orchestration/searchOrchestrator';
 import ConversationThread from '../components/ConversationThread';
 import FollowUpInput from '../components/FollowUpInput';
 import LoadingDots from '../components/LoadingDots';
+import { fetchCompareCandidates, resetClient } from '../services/keywordSearchService';
 import { withCurrentQuery } from '../utils/urlState';
 
 var DEFAULT_PROFILES = [
-  { id: 'heidi-salonen', name: 'Heidi Salonen', specialty: 'Asthma nurse', location: 'Helsinki', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'Tomorrow', fit: 'Testing, guidance, follow-up plans', reasons: ['Strong for recurring asthma questions', 'Good for diagnostics and care plans'] },
-  { id: 'anna-laine', name: 'Anna Laine', specialty: 'General practitioner', location: 'Espoo', languages: ['Finnish', 'Swedish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'Today', fit: 'First assessment, referrals, sick leave', reasons: ['Fast access', 'Good first stop when the issue is unclear'] },
-  { id: 'markus-virtanen', name: 'Markus Virtanen', specialty: 'Orthopedist', location: 'Vantaa', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'In 2 days', fit: 'Sports injuries, joint pain, imaging follow-up', reasons: ['Best for injury comparison', 'Useful when surgery options may matter'] },
-  { id: 'sofia-kallio', name: 'Sofia Kallio', specialty: 'Dermatologist', location: 'Turku', languages: ['Finnish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'This week', fit: 'Rashes, skin changes, long-term skin treatment', reasons: ['Strong remote suitability', 'Good for ongoing treatment plans'] },
+  { id: 'heidi-salonen', name: 'Heidi Salonen', specialty: 'Asthma nurse', location: 'Helsinki', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'Tomorrow', fit: 'Testing, guidance, follow-up plans', bio: 'Allergy and asthma examinations, guidance, and follow-up care.', reasons: ['Strong for recurring asthma questions', 'Good for diagnostics and care plans'], url: 'https://www.mehilainen.fi/en/doctors-and-specialists/heidi-salonen', source: 'curated' },
+  { id: 'anna-laine', name: 'Anna Laine', specialty: 'General practitioner', location: 'Espoo', languages: ['Finnish', 'Swedish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'Today', fit: 'First assessment, referrals, sick leave', bio: 'Primary-care option for quick first assessments and referral decisions.', reasons: ['Fast access', 'Good first stop when the issue is unclear'], url: '#', source: 'curated' },
+  { id: 'markus-virtanen', name: 'Markus Virtanen', specialty: 'Orthopedist', location: 'Vantaa', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'In 2 days', fit: 'Sports injuries, joint pain, imaging follow-up', bio: 'Focused on musculoskeletal issues and treatment planning.', reasons: ['Best for injury comparison', 'Useful when surgery options may matter'], url: '#', source: 'curated' },
+  { id: 'sofia-kallio', name: 'Sofia Kallio', specialty: 'Dermatologist', location: 'Turku', languages: ['Finnish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'This week', fit: 'Rashes, skin changes, long-term skin treatment', bio: 'Good for chronic or fast-changing skin issues.', reasons: ['Strong remote suitability', 'Good for ongoing treatment plans'], url: '#', source: 'curated' },
 ];
 
 export default function CarePage() {
@@ -43,11 +44,16 @@ function CareApp({ config }) {
   useEffect(function () {
     if (typeof document === 'undefined') return;
     var root = document.documentElement;
+    var body = document.body;
     if (theme.accentColor) root.style.setProperty('--accent', theme.accentColor);
     if (theme.bgColor) root.style.setProperty('--bg', theme.bgColor);
     if (theme.textColor) root.style.setProperty('--text', theme.textColor);
     if (theme.fontFamily) root.style.setProperty('--font', theme.fontFamily);
     if (theme.borderRadius) root.style.setProperty('--radius', theme.borderRadius);
+    body && body.setAttribute('data-px-theme', 'light-health');
+    return function () {
+      if (body) body.removeAttribute('data-px-theme');
+    };
   }, [theme]);
 
   var [state, setState] = useState(orchestrator.INITIAL_STATE);
@@ -61,24 +67,76 @@ function CareApp({ config }) {
 
   var [selectedIds, setSelectedIds] = useState([]);
   var [focusSpecialty, setFocusSpecialty] = useState('All');
+  var [compareQuery, setCompareQuery] = useState('specialists');
+  var [liveProfiles, setLiveProfiles] = useState([]);
+  var [compareLoading, setCompareLoading] = useState(false);
+  var [compareError, setCompareError] = useState('');
+  var [lastCompareSource, setLastCompareSource] = useState('curated');
+
+  useEffect(function () {
+    resetClient();
+  }, [config.siteKey]);
+
+  useEffect(function () {
+    if (!config.siteKey) {
+      setLiveProfiles([]);
+      setLastCompareSource('curated');
+      return;
+    }
+    runCompareSearch('specialists');
+  }, [config.siteKey]);
+
+  function runCompareSearch(query) {
+    var finalQuery = (query || '').trim();
+    if (!finalQuery) return;
+    setCompareLoading(true);
+    setCompareError('');
+    fetchCompareCandidates(finalQuery, { limit: 8 }).then(function (response) {
+      var results = response && response.results ? response.results : [];
+      if (results.length > 0) {
+        setLiveProfiles(results);
+        setLastCompareSource('live');
+      } else {
+        setLiveProfiles([]);
+        setLastCompareSource('curated');
+        if (response && response.error) setCompareError(response.error);
+      }
+      setCompareLoading(false);
+    }).catch(function () {
+      setLiveProfiles([]);
+      setLastCompareSource('curated');
+      setCompareError('Unable to load live profiles right now.');
+      setCompareLoading(false);
+    });
+  }
+
+  var activeProfiles = liveProfiles.length > 0 ? liveProfiles : compareProfiles;
 
   var selectedDoctors = useMemo(function () {
-    return compareProfiles.filter(function (item) { return selectedIds.indexOf(item.id) !== -1; });
-  }, [selectedIds, compareProfiles]);
+    return activeProfiles.filter(function (item) { return selectedIds.indexOf(item.id) !== -1; });
+  }, [selectedIds, activeProfiles]);
+
+  useEffect(function () {
+    setSelectedIds(function (prev) {
+      return prev.filter(function (id) {
+        return activeProfiles.some(function (item) { return item.id === id; });
+      });
+    });
+  }, [activeProfiles]);
 
   var filteredProfiles = useMemo(function () {
-    return compareProfiles.filter(function (item) {
+    return activeProfiles.filter(function (item) {
       return focusSpecialty === 'All' || item.specialty === focusSpecialty;
     });
-  }, [focusSpecialty, compareProfiles]);
+  }, [focusSpecialty, activeProfiles]);
 
   var specialties = useMemo(function () {
     var values = ['All'];
-    compareProfiles.forEach(function (item) {
+    activeProfiles.forEach(function (item) {
       if (values.indexOf(item.specialty) === -1) values.push(item.specialty);
     });
     return values;
-  }, [compareProfiles]);
+  }, [activeProfiles]);
 
   function toggleCompare(id) {
     setSelectedIds(function (prev) {
@@ -92,38 +150,35 @@ function CareApp({ config }) {
     orchestrator.doChatMessage(prompt);
   }
 
+  function handleCompareSubmit(e) {
+    e.preventDefault();
+    runCompareSearch(compareQuery);
+  }
+
   var logoUrl = theme.logoUrl || '/mehilainen-wordmark.svg';
   var hasMessages = state.messages.length > 0 || state.followUpLoading || state.followUpStreaming;
 
   return (
     <main className="px-page px-care-page">
       <header className="px-header px-care-header">
-        <a href={withCurrentQuery('/care')} className="px-logo"><img src={logoUrl} alt="Logo" className="px-logo-img" /></a>
+        <a href={withCurrentQuery('/care')} className="px-logo"><img src={logoUrl} alt="Mehiläinen" className="px-logo-img px-logo-img-mehilainen" /></a>
         <nav className="px-care-nav">
           <a href={withCurrentQuery('/')} className="px-care-nav-link">Search demo</a>
           <a href={withCurrentQuery('/chat')} className="px-care-nav-link">Chat demo</a>
         </nav>
       </header>
 
-      <section className="px-care-hero">
+      <section className="px-care-hero px-care-hero-single">
         <div>
           <p className="px-care-kicker">Mehiläinen care navigator</p>
           <h1 className="px-care-title">Choose the right professional faster, then compare before booking.</h1>
-          <p className="px-care-subtitle">This variant is designed for healthcare visitors who are not only searching, but deciding. It combines guided AI triage with a shortlist and side-by-side comparison flow.</p>
+          <p className="px-care-subtitle">This variant is designed for healthcare visitors who are not only searching, but deciding. It combines guided AI support with live professional discovery and side-by-side comparison.</p>
           <div className="px-care-quick-actions">
             <button className="px-care-chip" onClick={function () { askJourney('I have recurring asthma symptoms and want to know whether to book a nurse, GP, or specialist.'); }}>Respiratory symptoms</button>
             <button className="px-care-chip" onClick={function () { askJourney('Help me decide between video care and an in-person appointment for a skin issue.'); }}>Video or in-person?</button>
             <button className="px-care-chip" onClick={function () { askJourney('I want to compare doctors based on specialty, language, and earliest availability.'); }}>Compare doctors</button>
           </div>
         </div>
-        <aside className="px-care-summary-card">
-          <div className="px-care-summary-top">
-            <span className="px-care-summary-label">Live config</span>
-            <span className="px-care-summary-pill">site key: {config.siteKey ? 'active' : 'missing'}</span>
-          </div>
-          <p className="px-care-summary-title">URL overrides work here too.</p>
-          <p className="px-care-summary-body">Use <code>?site_key=...</code> or <code>?siteKey=...</code> with <code>/care</code>, and the same value is preserved when moving between variants.</p>
-        </aside>
       </section>
 
       <section className="px-care-layout">
@@ -169,12 +224,28 @@ function CareApp({ config }) {
             <div className="px-care-panel-head">
               <div>
                 <p className="px-care-kicker">Doctor comparison</p>
-                <h2 className="px-care-section-title">Shortlist up to 3 professionals.</h2>
+                <h2 className="px-care-section-title">Search live profiles and shortlist up to 3 professionals.</h2>
               </div>
+              <span className="px-care-badge">{lastCompareSource === 'live' ? 'Live results' : 'Curated fallback'}</span>
             </div>
+
+            <form className="px-care-live-search" onSubmit={handleCompareSubmit}>
+              <input
+                type="text"
+                className="px-care-live-input"
+                value={compareQuery}
+                onChange={function (e) { setCompareQuery(e.target.value); }}
+                placeholder="Search doctors, specialists, or locations..."
+              />
+              <button className="px-care-live-btn" type="submit" disabled={compareLoading}>{compareLoading ? 'Loading...' : 'Find professionals'}</button>
+            </form>
+
+            <p className="px-care-empty-copy">Use the live site key to turn search hits into compare cards. When no live doctor-like hits are available, the demo falls back to curated healthcare profiles.</p>
+            {compareError && <p className="px-care-error">{compareError}</p>}
+
             <div className="px-care-filter-row">
               {specialties.map(function (specialty) {
-                return <button key={specialty} className={'px-care-filter' + (focusSpecialty === specialty ? ' px-care-filter-active' : '')} onClick={function () { setFocusSpecialty(specialty); }}>{specialty}</button>;
+                return <button type="button" key={specialty} className={'px-care-filter' + (focusSpecialty === specialty ? ' px-care-filter-active' : '')} onClick={function () { setFocusSpecialty(specialty); }}>{specialty}</button>;
               })}
             </div>
             <div className="px-care-candidate-list">
@@ -190,6 +261,9 @@ function CareApp({ config }) {
                       <p className="px-care-meta">{profile.specialty} · {profile.location}</p>
                       <p className="px-care-fit">Best for: {profile.fit}</p>
                       <p className="px-care-mini">{profile.languages.join(', ')} · {profile.visitTypes.join(', ')}</p>
+                      {profile.url && profile.url !== '#' && (
+                        <p className="px-care-profile-link-wrap"><a className="px-care-profile-link" href={profile.url} target="_blank" rel="noopener noreferrer">Open profile</a></p>
+                      )}
                     </div>
                     <button className={'px-care-select-btn' + (active ? ' is-active' : '')} onClick={function () { toggleCompare(profile.id); }}>{active ? 'Added' : 'Add to compare'}</button>
                   </article>

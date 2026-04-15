@@ -72,11 +72,14 @@ function ChatApp({ config }) {
   useEffect(function () {
     if (typeof document === 'undefined') return;
     var root = document.documentElement;
+    var body = document.body;
     if (theme.accentColor) root.style.setProperty('--accent', theme.accentColor);
     if (theme.bgColor) root.style.setProperty('--bg', theme.bgColor);
     if (theme.textColor) root.style.setProperty('--text', theme.textColor);
     if (theme.fontFamily) root.style.setProperty('--font', theme.fontFamily);
     if (theme.borderRadius) root.style.setProperty('--radius', theme.borderRadius);
+    if (body && theme.bgColor && /^#?[Ff]/.test(theme.bgColor)) body.setAttribute('data-px-theme', 'light-health');
+    return function () { if (body) body.removeAttribute('data-px-theme'); };
   }, [theme]);
 
   // React state
