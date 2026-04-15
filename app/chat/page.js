@@ -37,6 +37,7 @@ import ConversationThread from '../components/ConversationThread';
 import FollowUpInput from '../components/FollowUpInput';
 import LoadingDots from '../components/LoadingDots';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { withCurrentQuery } from '../utils/urlState';
 
 export default function ChatPage() {
   var [configReady, setConfigReady] = useState(false);
@@ -97,7 +98,7 @@ function ChatApp({ config }) {
     <main className="px-page">
       {/* ── Compact header ── */}
       <header className="px-header">
-        <a href="/" className="px-logo">
+        <a href={withCurrentQuery('/')} className="px-logo">
           <img src={logoUrl} alt="Logo" className="px-logo-img" />
         </a>
         {hasMessages && (

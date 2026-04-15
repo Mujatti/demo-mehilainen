@@ -5,6 +5,7 @@
 'use client';
 
 import AutocompleteDropdown from './AutocompleteDropdown';
+import { withCurrentQuery } from '../utils/urlState';
 
 export default function Header({
   hasSearched, logoUrl, placeholder,
@@ -15,7 +16,7 @@ export default function Header({
 
   return (
     <header className="px-header">
-      <a href="/" className="px-logo">
+      <a href={withCurrentQuery('/')} className="px-logo">
         <img src={logoUrl} alt="Logo" className="px-logo-img" />
       </a>
       {hasSearched && (

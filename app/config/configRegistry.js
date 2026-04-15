@@ -23,21 +23,70 @@
 
 import demoDefault from './examples/demo-default';
 import demoEcommerce from './examples/demo-customer-ecommerce';
-import demoMehilainenBrand from './examples/demo-mehilainen-brand';
-import demoMehilainenCare from './examples/demo-mehilainen-care';
 
 // ── Registry ──────────────────────────────────────
 // Each key maps to a config override object (merged onto defaults).
 
 var CONFIG_REGISTRY = {
 
+  'mehilainen-brand': {
+    siteKey: '',
+    labels: {
+      heroTitle: 'Find the right care path with AI-assisted search.',
+      heroSubtitle: 'Styled for Mehiläinen demos.',
+      searchPlaceholder: 'Search symptoms, services, doctors, or locations...',
+      headerSearchPlaceholder: 'Search care topics...',
+      searchButtonText: 'Search',
+      aiAnswerLabel: 'Care assistant',
+      followUpPlaceholder: 'Ask a follow-up about care or booking...',
+      resetButtonText: 'Start over',
+      searchTabLabel: 'Search',
+      diveTabLabel: 'Ask AI',
+      footerBrand: 'Mehiläinen',
+      footerBrandUrl: 'https://www.mehilainen.fi/en',
+      footerTagline: '· Private healthcare demo',
+    },
+    theme: {
+      accentColor: '#007A4D',
+      bgColor: '#F4F6F3',
+      textColor: '#1D2B24',
+      fontFamily: "'Arial', 'Helvetica Neue', sans-serif",
+      logoUrl: '/mehilainen-wordmark.svg',
+      borderRadius: '18px',
+    },
+  },
+
+  'mehilainen-care': {
+    siteKey: '',
+    labels: {
+      heroTitle: 'Describe your need and compare the best-fit professionals.',
+      heroSubtitle: 'A guided booking experience for Mehiläinen demos.',
+      searchPlaceholder: 'Describe symptoms or compare providers...',
+      followUpPlaceholder: 'Ask about symptoms, provider fit, language, or visit type...',
+      resetButtonText: 'Reset',
+      footerBrandUrl: 'https://www.mehilainen.fi/en',
+    },
+    theme: {
+      accentColor: '#007A4D',
+      bgColor: '#F4F6F3',
+      textColor: '#1D2B24',
+      fontFamily: "'Arial', 'Helvetica Neue', sans-serif",
+      logoUrl: '/mehilainen-wordmark.svg',
+      borderRadius: '18px',
+    },
+    compareProfiles: [
+      { id: 'heidi-salonen', name: 'Heidi Salonen', specialty: 'Asthma nurse', location: 'Helsinki', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'Tomorrow', fit: 'Testing, guidance, follow-up plans', bio: 'Allergy and asthma examinations, guidance, and follow-up care.', reasons: ['Strong for recurring asthma questions', 'Good for diagnostics and care plans'] },
+      { id: 'anna-laine', name: 'Anna Laine', specialty: 'General practitioner', location: 'Espoo', languages: ['Finnish', 'Swedish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'Today', fit: 'First assessment, referrals, sick leave', bio: 'Primary-care option for quick first assessments and referral decisions.', reasons: ['Fast access', 'Good first stop when the issue is unclear'] },
+      { id: 'markus-virtanen', name: 'Markus Virtanen', specialty: 'Orthopedist', location: 'Vantaa', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'In 2 days', fit: 'Sports injuries, joint pain, imaging follow-up', bio: 'Focused on musculoskeletal issues and treatment planning.', reasons: ['Best for injury comparison', 'Useful when surgery options may matter'] },
+      { id: 'sofia-kallio', name: 'Sofia Kallio', specialty: 'Dermatologist', location: 'Turku', languages: ['Finnish', 'English'], visitTypes: ['Video', 'In person'], nextAvailable: 'This week', fit: 'Rashes, skin changes, long-term skin treatment', bio: 'Good for chronic or fast-changing skin issues.', reasons: ['Strong remote suitability', 'Good for ongoing treatment plans'] },
+    ],
+  },
+
   // AddSearch's own index — the default demo
   'default': demoDefault,
 
   // E-commerce demo (product search with price sorting)
   'ecommerce': demoEcommerce,
-  'mehilainen-brand': demoMehilainenBrand,
-  'mehilainen-care': demoMehilainenCare,
 
   // Acme Corp — fictional B2B company
   'acme': {
