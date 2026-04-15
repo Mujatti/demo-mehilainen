@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import MarkdownRenderer from './MarkdownRenderer';
 import SmoothStreamingText from './SmoothStreamingText';
 import ThinkingIndicator from './ThinkingIndicator';
-import { fetchDoctorProfilesByNames, mergeDoctorNames } from '../services/keywordSearchService';
+import { fetchDoctorProfilesByNames } from '../services/keywordSearchService';
 
 export default function AiAnswerCard({
   answer, sources, isStreaming, isThinking,
@@ -17,13 +17,10 @@ export default function AiAnswerCard({
 }) {
   var sourcesText = (sourcesLabel || 'Sources').replace('{count}', (sources || []).length);
   var doctorNames = useMemo(function () {
-    return mergeDoctorNames(extractDoctorNamesFromAnswer(answer), sources || []);
-  }, [answer, sources]);
+    return extractDoctorNamesFromAnswer(answer);
+  }, [answer]);
   var doctorNamesKey = doctorNames.join('|');
   var doctorProfileMap = useDoctorPreviewMap(doctorNames, isStreaming, isThinking);
-  var doctorProfiles = useMemo(function () {
-    return Object.keys(doctorProfileMap || {}).map(function (key) { return doctorProfileMap[key]; });
-  }, [doctorProfileMap]);
   var renderedAnswer = useMemo(function () {
     if (isStreaming || isThinking) return answer;
     return injectDoctorPreviewMarkup(answer, doctorProfileMap);
@@ -36,21 +33,6 @@ export default function AiAnswerCard({
         {query && <> for: <strong>{query}</strong></>}
         {(isStreaming || isThinking) && <span className="px-streaming-badge">{streamingLabel || 'Thinking...'}</span>}
       </div>
-      {!isStreaming && !isThinking && doctorProfiles.length > 0 && (
-        <div className="px-inline-doctor-list">
-          {doctorProfiles.map(function (profile) {
-            return (
-              <a key={profile.id || profile.url || profile.name} className="px-inline-doctor px-inline-doctor-card" href={profile.url || '#'} target="_blank" rel="noopener noreferrer">
-                <img className="px-inline-doctor-avatar" src={profile.imageUrl} alt={profile.name} loading="lazy" />
-                <span className="px-inline-doctor-copy">
-                  <strong className="px-inline-doctor-name">{profile.name}</strong>
-                  <span className="px-inline-doctor-meta">{profile.specialty || 'Specialist profile'}</span>
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      )}
       {isStreaming ? (
         <SmoothStreamingText content={answer} isStreaming={isStreaming} />
       ) : isThinking ? (

@@ -611,3 +611,15 @@ body[data-px-theme='light-health'] .md-content strong { color: var(--text) !impo
     height: 38px;
   }
 }
+
+.px-inline-doctor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.px-inline-doctor-card {
+  min-width: 220px;
+  max-width: 100%;
+  border-radius: 18px;
+}

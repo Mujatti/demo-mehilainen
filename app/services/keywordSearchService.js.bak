@@ -263,46 +263,12 @@ function normalizeCompareHit(hit) {
 
 function firstNonEmpty(values) {
   for (var i = 0; i < values.length; i += 1) {
-    var value = extractScalar(values[i]);
+    var value = values[i];
     if (Array.isArray(value) && value.length) return value;
     if (typeof value === 'string' && value.trim()) return value.trim();
     if (value && typeof value !== 'object') return value;
   }
   return '';
-}
-
-function extractScalar(value) {
-  if (value == null) return '';
-  if (Array.isArray(value)) {
-    for (var i = 0; i < value.length; i += 1) {
-      var nested = extractScalar(value[i]);
-      if (Array.isArray(nested) && nested.length) return nested;
-      if (typeof nested === 'string' && nested.trim()) return nested.trim();
-      if (nested && typeof nested !== 'object') return nested;
-    }
-    return '';
-  }
-
-  if (typeof value === 'object') {
-    var preferredKeys = ['value', 'raw', 'text', 'label', 'title', 'name', 'path', 'src', 'url', 'main', 'capture'];
-    for (var j = 0; j < preferredKeys.length; j += 1) {
-      var key = preferredKeys[j];
-      if (Object.prototype.hasOwnProperty.call(value, key)) {
-        var preferred = extractScalar(value[key]);
-        if (preferred) return preferred;
-      }
-    }
-
-    var objectKeys = Object.keys(value);
-    for (var k = 0; k < objectKeys.length; k += 1) {
-      var nestedValue = extractScalar(value[objectKeys[k]]);
-      if (nestedValue) return nestedValue;
-    }
-
-    return '';
-  }
-
-  return value;
 }
 
 function pickDeep(obj, path) {
@@ -311,14 +277,14 @@ function pickDeep(obj, path) {
     if (!current || typeof current !== 'object') return '';
     current = current[path[i]];
   }
-  return extractScalar(current) || '';
+  return current || '';
 }
 
 function toArray(value) {
   if (!value) return [];
-  if (Array.isArray(value)) return value.map(extractScalar).map(cleanValue).filter(Boolean);
+  if (Array.isArray(value)) return value.map(cleanValue).filter(Boolean);
   if (typeof value === 'string') return value.split(/[,|/]/).map(cleanValue).filter(Boolean);
-  return [cleanValue(String(extractScalar(value) || value))].filter(Boolean);
+  return [cleanValue(String(value))].filter(Boolean);
 }
 
 function cleanValue(value) {
@@ -395,17 +361,12 @@ function extractImageUrl(hit) {
     hit.picturepath,
     hit.image,
     hit.thumbnail,
-    hit.thumbnailUrl,
     pickDeep(hit, ['custom_fields', 'picturePath']),
     pickDeep(hit, ['custom_fields', 'picturepath']),
-    pickDeep(hit, ['customFields', 'picturePath']),
-    pickDeep(hit, ['customFields', 'picturepath']),
     pickDeep(hit, ['meta', 'picturePath']),
     pickDeep(hit, ['meta', 'picturepath']),
     pickDeep(hit, ['images', 'main']),
-    pickDeep(hit, ['images', 'capture']),
-    pickDeep(hit, ['image', 'src']),
-    pickDeep(hit, ['image', 'url'])
+    pickDeep(hit, ['images', 'capture'])
   ]);
 
   return normalizeImageUrl(raw);
@@ -436,44 +397,4 @@ function isDoctorProfileUrl(url) {
 
 function normalizeLookupValue(value) {
   return cleanValue(value).toLowerCase().replace(/[^a-zà-öø-ÿåäö0-9]+/g, ' ').trim();
-}
-
-
-export function extractDoctorNameFromSourceTitle(title) {
-  var raw = cleanValue(title);
-  if (!raw) return '';
-  var beforeComma = raw.split(',')[0];
-  var beforeDash = beforeComma.split(' - ')[0];
-  return looksLikePersonName(beforeDash) ? beforeDash : '';
-}
-
-function looksLikePersonName(value) {
-  if (!value) return false;
-  var parts = cleanValue(value).split(/\s+/).filter(Boolean);
-  if (parts.length < 2 || parts.length > 4) return false;
-  for (var i = 0; i < parts.length; i += 1) {
-    if (!/^[A-ZÅÄÖÉÜ][A-Za-zÀ-ÖØ-öø-ÿÅÄÖåäöÉéÜü'’-]+$/.test(parts[i])) return false;
-  }
-  return true;
-}
-
-export function mergeDoctorNames(names, sources) {
-  var merged = [];
-  var seen = {};
-
-  function pushName(name) {
-    var cleaned = cleanValue(name);
-    var key = normalizeLookupValue(cleaned);
-    if (!cleaned || !key || seen[key]) return;
-    seen[key] = true;
-    merged.push(cleaned);
-  }
-
-  (names || []).forEach(pushName);
-  (sources || []).forEach(function (source) {
-    if (!source) return;
-    pushName(extractDoctorNameFromSourceTitle(source.title));
-  });
-
-  return merged;
 }
