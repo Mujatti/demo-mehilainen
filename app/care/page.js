@@ -9,6 +9,7 @@ import FollowUpInput from '../components/FollowUpInput';
 import LoadingDots from '../components/LoadingDots';
 import { fetchCompareCandidates, resetClient } from '../services/keywordSearchService';
 import { withCurrentQuery } from '../utils/urlState';
+import { loadCompareSelection, saveCompareSelection } from '../utils/compareSelection';
 
 var DEFAULT_PROFILES = [
   { id: 'heidi-salonen', name: 'Heidi Salonen', specialty: 'Asthma nurse', location: 'Helsinki', languages: ['Finnish', 'English'], visitTypes: ['In person'], nextAvailable: 'Tomorrow', fit: 'Testing, guidance, follow-up plans', bio: 'Allergy and asthma examinations, guidance, and follow-up care.', reasons: ['Strong for recurring asthma questions', 'Good for diagnostics and care plans'], url: 'https://www.mehilainen.fi/en/doctors-and-specialists/heidi-salonen', source: 'curated' },
@@ -66,6 +67,7 @@ function CareApp({ config }) {
   }
 
   var [selectedIds, setSelectedIds] = useState([]);
+  var [seedProfiles, setSeedProfiles] = useState([]);
   var [focusSpecialty, setFocusSpecialty] = useState('All');
   var [compareQuery, setCompareQuery] = useState('specialists');
   var [liveProfiles, setLiveProfiles] = useState([]);
@@ -78,12 +80,22 @@ function CareApp({ config }) {
   }, [config.siteKey]);
 
   useEffect(function () {
+    var stored = loadCompareSelection();
+    setSeedProfiles(stored);
+    setSelectedIds(stored.map(function (item) { return item.id; }));
+    if (stored.length > 0) {
+      var firstNamed = stored.map(function (item) { return item.name; }).filter(Boolean).slice(0, 3).join(', ');
+      if (firstNamed) setCompareQuery(firstNamed);
+    }
+  }, []);
+
+  useEffect(function () {
     if (!config.siteKey) {
       setLiveProfiles([]);
-      setLastCompareSource('curated');
+      setLastCompareSource(seedProfiles.length > 0 ? 'main-demo' : 'curated');
       return;
     }
-    runCompareSearch('specialists');
+    runCompareSearch(compareQuery || 'specialists');
   }, [config.siteKey]);
 
   function runCompareSearch(query) {
@@ -98,19 +110,30 @@ function CareApp({ config }) {
         setLastCompareSource('live');
       } else {
         setLiveProfiles([]);
-        setLastCompareSource('curated');
+        setLastCompareSource(seedProfiles.length > 0 ? 'main-demo' : 'curated');
         if (response && response.error) setCompareError(response.error);
       }
       setCompareLoading(false);
     }).catch(function () {
       setLiveProfiles([]);
-      setLastCompareSource('curated');
+      setLastCompareSource(seedProfiles.length > 0 ? 'main-demo' : 'curated');
       setCompareError('Unable to load live profiles right now.');
       setCompareLoading(false);
     });
   }
 
-  var activeProfiles = liveProfiles.length > 0 ? liveProfiles : compareProfiles;
+  var activeProfiles = useMemo(function () {
+    var merged = [];
+    var seen = {};
+    [seedProfiles, liveProfiles.length > 0 ? liveProfiles : compareProfiles].forEach(function (group) {
+      (group || []).forEach(function (item) {
+        if (!item || !item.id || seen[item.id]) return;
+        seen[item.id] = true;
+        merged.push(item);
+      });
+    });
+    return merged;
+  }, [seedProfiles, liveProfiles, compareProfiles]);
 
   var selectedDoctors = useMemo(function () {
     return activeProfiles.filter(function (item) { return selectedIds.indexOf(item.id) !== -1; });
@@ -124,6 +147,11 @@ function CareApp({ config }) {
     });
   }, [activeProfiles]);
 
+  useEffect(function () {
+    var selectedProfiles = activeProfiles.filter(function (item) { return selectedIds.indexOf(item.id) !== -1; });
+    if (selectedProfiles.length > 0) saveCompareSelection(selectedProfiles);
+  }, [selectedIds, activeProfiles]);
+
   var filteredProfiles = useMemo(function () {
     return activeProfiles.filter(function (item) {
       return focusSpecialty === 'All' || item.specialty === focusSpecialty;
@@ -133,7 +161,7 @@ function CareApp({ config }) {
   var specialties = useMemo(function () {
     var values = ['All'];
     activeProfiles.forEach(function (item) {
-      if (values.indexOf(item.specialty) === -1) values.push(item.specialty);
+      if (item.specialty && values.indexOf(item.specialty) === -1) values.push(item.specialty);
     });
     return values;
   }, [activeProfiles]);
@@ -226,8 +254,14 @@ function CareApp({ config }) {
                 <p className="px-care-kicker">Doctor comparison</p>
                 <h2 className="px-care-section-title">Search live profiles and shortlist up to 3 professionals.</h2>
               </div>
-              <span className="px-care-badge">{lastCompareSource === 'live' ? 'Live results' : 'Curated fallback'}</span>
+              <span className="px-care-badge">{lastCompareSource === 'live' ? 'Live results' : lastCompareSource === 'main-demo' ? 'From main demo' : 'Curated fallback'}</span>
             </div>
+
+            {seedProfiles.length > 0 && (
+              <div className="px-care-seeded-note">
+                <strong>{seedProfiles.length}</strong> professional{seedProfiles.length > 1 ? 's were' : ' was'} sent here from the main demo. They are already available in compare.
+              </div>
+            )}
 
             <form className="px-care-live-search" onSubmit={handleCompareSubmit}>
               <input
@@ -240,7 +274,7 @@ function CareApp({ config }) {
               <button className="px-care-live-btn" type="submit" disabled={compareLoading}>{compareLoading ? 'Loading...' : 'Find professionals'}</button>
             </form>
 
-            <p className="px-care-empty-copy">Use the live site key to turn search hits into compare cards. When no live doctor-like hits are available, the demo falls back to curated healthcare profiles.</p>
+            <p className="px-care-empty-copy">Search live profiles by specialty, city, or doctor name. Cards sent from the main demo stay pinned here so the visitor can keep comparing without starting over.</p>
             {compareError && <p className="px-care-error">{compareError}</p>}
 
             <div className="px-care-filter-row">
@@ -253,17 +287,20 @@ function CareApp({ config }) {
                 var active = selectedIds.indexOf(profile.id) !== -1;
                 return (
                   <article key={profile.id} className={'px-care-candidate' + (active ? ' px-care-candidate-active' : '')}>
-                    <div>
-                      <div className="px-care-candidate-top">
-                        <h3>{profile.name}</h3>
-                        <span className="px-care-badge">{profile.nextAvailable}</span>
+                    <div className="px-care-candidate-body">
+                      {profile.imageUrl ? <img className="px-care-candidate-avatar" src={profile.imageUrl} alt={profile.name} loading="lazy" /> : <div className="px-care-candidate-avatar px-care-candidate-avatar-fallback" aria-hidden="true">{(profile.name || '?').charAt(0)}</div>}
+                      <div>
+                        <div className="px-care-candidate-top">
+                          <h3>{profile.name}</h3>
+                          <span className="px-care-badge">{profile.nextAvailable}</span>
+                        </div>
+                        <p className="px-care-meta">{profile.specialty} · {profile.location}</p>
+                        <p className="px-care-fit">Best for: {profile.fit}</p>
+                        <p className="px-care-mini">{(profile.languages || []).join(', ')} · {(profile.visitTypes || []).join(', ')}</p>
+                        {profile.url && profile.url !== '#' && (
+                          <p className="px-care-profile-link-wrap"><a className="px-care-profile-link" href={profile.url} target="_blank" rel="noopener noreferrer">Open profile</a></p>
+                        )}
                       </div>
-                      <p className="px-care-meta">{profile.specialty} · {profile.location}</p>
-                      <p className="px-care-fit">Best for: {profile.fit}</p>
-                      <p className="px-care-mini">{profile.languages.join(', ')} · {profile.visitTypes.join(', ')}</p>
-                      {profile.url && profile.url !== '#' && (
-                        <p className="px-care-profile-link-wrap"><a className="px-care-profile-link" href={profile.url} target="_blank" rel="noopener noreferrer">Open profile</a></p>
-                      )}
                     </div>
                     <button className={'px-care-select-btn' + (active ? ' is-active' : '')} onClick={function () { toggleCompare(profile.id); }}>{active ? 'Added' : 'Add to compare'}</button>
                   </article>
@@ -287,17 +324,19 @@ function CareApp({ config }) {
                   <thead>
                     <tr>
                       <th>Criteria</th>
-                      {selectedDoctors.map(function (doctor) { return <th key={doctor.id}>{doctor.name}</th>; })}
+                      {selectedDoctors.map(function (doctor) {
+                        return <th key={doctor.id}><div className="px-care-compare-head"><span>{doctor.name}</span>{doctor.imageUrl ? <img className="px-care-compare-avatar" src={doctor.imageUrl} alt={doctor.name} loading="lazy" /> : null}</div></th>;
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     <tr><td>Specialty</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.specialty}</td>; })}</tr>
                     <tr><td>Location</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.location}</td>; })}</tr>
-                    <tr><td>Languages</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.languages.join(', ')}</td>; })}</tr>
-                    <tr><td>Visit type</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.visitTypes.join(', ')}</td>; })}</tr>
+                    <tr><td>Languages</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{(doctor.languages || []).join(', ')}</td>; })}</tr>
+                    <tr><td>Visit type</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{(doctor.visitTypes || []).join(', ')}</td>; })}</tr>
                     <tr><td>Next available</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.nextAvailable}</td>; })}</tr>
                     <tr><td>Best fit</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}>{doctor.fit}</td>; })}</tr>
-                    <tr><td>Why choose</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}><ul>{doctor.reasons.map(function (reason) { return <li key={reason}>{reason}</li>; })}</ul></td>; })}</tr>
+                    <tr><td>Why choose</td>{selectedDoctors.map(function (doctor) { return <td key={doctor.id}><ul>{(doctor.reasons || []).map(function (reason) { return <li key={reason}>{reason}</li>; })}</ul></td>; })}</tr>
                   </tbody>
                 </table>
               </div>
