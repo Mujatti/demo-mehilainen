@@ -1,0 +1,40 @@
+var demoMehilainenBrand = {
+  labels: {
+    heroTitle: 'Search trusted care, services, and specialists in one place.',
+    heroSubtitle: 'A Mehiläinen-themed AI search demo for healthcare discovery and appointment intent.',
+    searchPlaceholder: 'Search for symptoms, services, locations, or specialists...',
+    searchButtonText: 'Search',
+    headerSearchPlaceholder: 'Search Mehiläinen...',
+    aiAnswerLabel: 'Care assistant',
+    diveButtonText: 'Ask a follow-up →',
+    initialAnswerLabel: 'Summary',
+    followUpPlaceholder: 'Ask about treatment options, specialties, or next steps...',
+    freshQuestionPlaceholder: 'What kind of care are you looking for?',
+    resetButtonText: 'Start over',
+    relatedResultsLabel: 'Relevant care options',
+    searchTabLabel: 'Search',
+    diveTabLabel: 'Ask AI',
+    exploringLabel: 'Exploring care options for',
+    resumeButtonText: 'Resume care discussion →',
+    resetAllButtonText: 'Reset',
+    footerBrand: 'Mehiläinen',
+    footerBrandUrl: 'https://www.mehilainen.fi/en',
+    footerTagline: '· AI search demo',
+    sourcesLabel: '{count} sources',
+  },
+  theme: {
+    accentColor: '#006845',
+    bgColor: '#F7F8F6',
+    textColor: '#151515',
+    fontFamily: '"Meliva Sans", Verdana, Geneva, sans-serif',
+    logoUrl: '/mehilainen-logo.svg',
+    borderRadius: '16px',
+  },
+  filterOptions: {
+    all: { label: 'All results', filter: {}, active: true },
+    services: { label: 'Services', filter: { category: '1xdocs' } },
+    specialists: { label: 'Specialists', filter: { category: '1xblog' } },
+  },
+};
+
+export default demoMehilainenBrand;
